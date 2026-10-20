@@ -27,6 +27,7 @@ func _ready() -> void:
 	_bar.position = Vector2(76, 20)
 	_bar.size = bar_size
 	_bar.show_percentage = false
+	_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bg := StyleBoxFlat.new()
 	bg.bg_color = Color(0.05, 0.06, 0.09, 0.75)
 	bg.border_color = Color(0.6, 0.6, 0.65, 0.6)
