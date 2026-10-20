@@ -266,6 +266,8 @@ func _build_fog() -> void:
 	add_child(_fog)
 	var rect := ColorRect.new()
 	rect.name = "FogLayer"
+	# The fog covers the whole screen: it must let clicks through to _unhandled_input.
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rect.size = Vector2(1800, 1100)
 	rect.light_mask = MASK_SHADOWED
 	var mat := ShaderMaterial.new()
