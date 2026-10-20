@@ -1,0 +1,279 @@
+{
+  "px_per_m": 64,
+  "camera": {
+    "projection": "orthographic",
+    "godot_rotation_degrees": [
+      -30,
+      45,
+      0
+    ],
+    "note": "30 deg down, yaw 45, looking from +x+z towards -x-z; same as the 3D game"
+  },
+  "files": "<name>/<anim>_<dir>_<frame>.png colour (albedo x baked AO, straight alpha); _n.png normal map; _e.png emissive layer (only when emissive is true), drawn unlit on top",
+  "normal_map": "screen space: red = +right, green = +up on screen, blue = towards the viewer",
+  "origin": "pixel of the asset's ground origin, from the image's top-left corner (pixel corners; Sprite2D centered = false, offset = -origin)",
+  "dirs_actor": "dir k = world heading k*45 deg (0 = +x, increasing towards +z, as in the sim)",
+  "dirs_prop": "dir d = rot/90: the model turned d*90 deg about +y like Godot rotation_degrees.y = rot (+x turns towards -z)",
+  "frames": "frame i shows the animation at phase i/frames; fps is a suggested playback rate",
+  "lights": "light anchors in metres relative to the ground origin at dir 0 (x, y up, z), glTF axes",
+  "assets": {
+    "robot": {
+      "kind": "actor",
+      "size": [
+        108,
+        102
+      ],
+      "origin": [
+        54,
+        89
+      ],
+      "dirs": 8,
+      "anims": {
+        "idle": {
+          "frames": 1,
+          "fps": 1,
+          "loop": true
+        },
+        "walk": {
+          "frames": 8,
+          "fps": 16,
+          "loop": true
+        },
+        "attack": {
+          "frames": 6,
+          "fps": 10,
+          "loop": false
+        }
+      },
+      "emissive": true,
+      "lights": {
+        "headlight": [
+          0.28,
+          1.1,
+          0.0
+        ]
+      }
+    },
+    "scrap_drone": {
+      "kind": "actor",
+      "size": [
+        60,
+        105
+      ],
+      "origin": [
+        30,
+        102
+      ],
+      "dirs": 8,
+      "anims": {
+        "hover": {
+          "frames": 4,
+          "fps": 8,
+          "loop": true
+        }
+      },
+      "emissive": true,
+      "lights": {
+        "eye_light": [
+          0.3,
+          1.2,
+          0.0
+        ]
+      }
+    },
+    "fuel_canister": {
+      "kind": "prop",
+      "size": [
+        32,
+        44
+      ],
+      "origin": [
+        16,
+        36
+      ],
+      "dirs": 1,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    },
+    "house_ruin_a": {
+      "kind": "prop",
+      "size": [
+        780,
+        659
+      ],
+      "origin": [
+        390,
+        463
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    },
+    "house_ruin_b": {
+      "kind": "prop",
+      "size": [
+        708,
+        571
+      ],
+      "origin": [
+        354,
+        393
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    },
+    "subway_entrance": {
+      "kind": "prop",
+      "size": [
+        460,
+        389
+      ],
+      "origin": [
+        230,
+        272
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    },
+    "car_wreck": {
+      "kind": "prop",
+      "size": [
+        312,
+        201
+      ],
+      "origin": [
+        156,
+        125
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    },
+    "street_lamp": {
+      "kind": "prop",
+      "size": [
+        146,
+        293
+      ],
+      "origin": [
+        73,
+        279
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": true,
+      "lights": {
+        "light": [
+          0.05,
+          4.2,
+          -1.15
+        ]
+      }
+    },
+    "campfire": {
+      "kind": "prop",
+      "size": [
+        92,
+        58
+      ],
+      "origin": [
+        46,
+        35
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": true,
+      "lights": {
+        "light": [
+          0.0,
+          0.6,
+          0.0
+        ]
+      }
+    },
+    "tree": {
+      "kind": "prop",
+      "size": [
+        300,
+        386
+      ],
+      "origin": [
+        150,
+        355
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    },
+    "bush": {
+      "kind": "prop",
+      "size": [
+        102,
+        91
+      ],
+      "origin": [
+        51,
+        68
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    }
+  }
+}
