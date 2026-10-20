@@ -29,3 +29,10 @@ func test_dir_index_wraps_headings_to_eight_directions() -> void:
 func test_missing_manifest_means_no_sprites() -> void:
 	var bank := SpriteBank.new("res://does/not/exist.json")
 	assert_false(bank.has("robot"))
+
+
+func test_shipped_manifest_gives_every_listed_asset_a_first_frame() -> void:
+	var bank := SpriteBank.new()
+	for asset: String in bank.names():
+		var anim := bank.pick_anim(asset, "idle")
+		assert_false(bank.frame(asset, anim, 0, 0).is_empty(), asset)

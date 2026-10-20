@@ -6,6 +6,8 @@ extends Node2D
 ## Multiplies unlit layers so they keep their own colour under the CanvasModulate (set by Main).
 static var unlit_boost := Color.WHITE
 
+static var _alpha_cache: Dictionary = {}  ## diffuse texture -> Image, for the cutaway alpha test
+
 var asset := ""
 var lift_m := 0.0  ## metres the body floats above its ground point
 var base_lift := 0.0  ## lift without bobbing: stand-ins hover by code, sprites are rendered hovering
@@ -36,7 +38,9 @@ func setup(bank: SpriteBank, asset_name: String, footprint: Vector2, height: flo
 		add_child(_sprite)
 		_emissive = Sprite2D.new()
 		_emissive.centered = false
-		_emissive.material = _unlit_material()
+		var add := _unlit_material()
+		add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD  # _e.png: emission colour, alpha = glow amount
+		_emissive.material = add
 		_emissive.self_modulate = unlit_boost
 		add_child(_emissive)
 		set_pose("static", rot, 0.0)
@@ -84,7 +88,8 @@ func set_pose(anim: String, heading: float, t: float, phase := false) -> void:
 	if phase:
 		f = clampi(int(t * count), 0, count - 1)
 	else:
-		f = int(t * _bank.fps(asset)) % maxi(count, 1)
+		f = int(t * _bank.fps(asset, a))
+		f = f % count if _bank.loops(asset, a) else mini(f, count - 1)
 	if a == _anim and dir == _dir and f == _frame:
 		return
 	_anim = a
@@ -100,7 +105,23 @@ func set_pose(anim: String, heading: float, t: float, phase := false) -> void:
 	_emissive.offset = off
 
 
-## The body's image rect in local pixels (for the cutaway test).
+## True when the body's image is opaque at a local pixel (for the cutaway test). Sprites test their alpha.
+func covers(local: Vector2) -> bool:
+	if not screen_rect().has_point(local):
+		return false
+	if _sprite == null or _sprite.texture == null:
+		return true
+	var tex: Texture2D = (_sprite.texture as CanvasTexture).diffuse_texture
+	if not _alpha_cache.has(tex):
+		_alpha_cache[tex] = tex.get_image()
+	var img: Image = _alpha_cache[tex]
+	var px := Vector2i(local - _sprite.offset)
+	if px.x < 0 or px.y < 0 or px.x >= img.get_width() or px.y >= img.get_height():
+		return false
+	return img.get_pixelv(px).a > 0.5
+
+
+## The body's image rect in local pixels.
 func screen_rect() -> Rect2:
 	if _sprite != null and _sprite.texture != null:
 		return Rect2(_sprite.offset, _sprite.texture.get_size())

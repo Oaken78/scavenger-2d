@@ -30,6 +30,7 @@ const MASK_PROPS := 2  ## props: lit without shadows (a 2D sprite cannot shadow 
 @export var fire_energy := 1.7
 @export var fire_radius_m := 7.0
 @export var flicker_seed := 20261020
+@export var flicker_rate_hz := 15.0  ## how often the broken lamp picks a new brightness
 @export_group("Robot headlight")
 @export var headlight_color := Color(0.92, 0.95, 1.0)
 @export var headlight_energy := 1.9
@@ -37,6 +38,8 @@ const MASK_PROPS := 2  ## props: lit without shadows (a 2D sprite cannot shadow 
 @export var headlight_half_angle_deg := 26.0
 @export var headlight_fade_s := 2.0  ## fade-out when the fuel runs dry
 @export var robot_glow_radius_m := 2.2  ## small fill light around the robot so it never vanishes in the dark
+@export var canister_glow_color := Color(0.55, 0.36, 0.1)  ## pickup beacon so a 32 px canister reads in the dark
+@export var canister_glow_radius_m := 0.7
 @export_group("Drones")
 @export var eye_color := Color(1.0, 0.12, 0.08)
 @export var eye_energy := 1.3
@@ -91,6 +94,8 @@ var _robot_glow: PointLight2D
 var _drones: Array[EntityView] = []
 var _eyes: Array[PointLight2D] = []
 var _canisters: Array[EntityView] = []
+var _eye_anchor := Vector3.ZERO  ## drone eye light anchor at dir 0 (metres)
+var _head_anchor := Vector3.ZERO  ## robot headlight anchor at dir 0 (metres)
 var _tall: Array[EntityView] = []  ## props that fade when they hide the robot
 var _flickers: Array = []  ## {lights: Array[Light2D], base: float, kind: String}
 var _wisps: Array = []  ## {node: Sprite2D, vel: Vector2 (m/s), pos: Vector2 (m)}
@@ -103,6 +108,7 @@ var _flash_left := 0.0  ## robot hurt flash, 1 -> 0
 var _radial: GradientTexture2D
 var _pool: GradientTexture2D  ## 2:1 ellipse: a ground circle seen by the iso camera
 var _headlight_tex: ImageTexture
+static var _cone_cache: ImageTexture  ## built once per run, not per restart
 
 
 func _ready() -> void:
@@ -322,17 +328,20 @@ func _build_props() -> void:
 			_add_occluder(view, Vector2(real[0], real[1]), rot)
 		match str(p.get("light", "")):
 			"lamp", "lamp_flicker":
-				var h := float(fp.get("light_height", 4.2))
+				# Bulb anchor at rot 0 (glTF axes), turned like Godot's rotation_degrees.y = rot (+x towards -z).
+				var bulb := _bank.light_anchor(asset, Vector3(0, float(fp.get("light_height", 4.2)), 0))
+				var h := bulb.y
+				var under := Vector2(bulb.x, bulb.z).rotated(-rot)
 				view.add_spot(Vector3(0, h, 0), 4.0, Color(1.0, 0.85, 0.6))
-				_add_glow(view, h, lamp_color, 1.4)
-				var lights := _add_light_pair(pos, lamp_color, lamp_energy, lamp_radius_m, h, _pool, Vector2.ZERO)
+				_add_glow(view, under, h, lamp_color, 1.4)
+				var lights := _add_light_pair(pos + under, lamp_color, lamp_energy, lamp_radius_m, h, _pool, Vector2.ZERO)
 				_flickers.append({"lights": lights, "base": lamp_energy, "kind": str(p["light"])})
 			"fire":
-				var h := float(fp.get("light_height", 0.6))
+				var h := _bank.light_anchor(asset, Vector3(0, float(fp.get("light_height", 0.6)), 0)).y
 				for k in 6:
 					var a := TAU * k / 6.0
 					view.add_spot(Vector3(cos(a) * 0.3, 0.15 + 0.1 * (k % 2), sin(a) * 0.3), 3.0, Color(1.0, 0.55, 0.15))
-				_add_glow(view, h, fire_color, 1.5)
+				_add_glow(view, Vector2.ZERO, h, fire_color, 1.5)
 				_add_embers(view)
 				var lights := _add_light_pair(pos, fire_color, fire_energy, fire_radius_m, h, _pool, Vector2.ZERO)
 				_flickers.append({"lights": lights, "base": fire_energy, "kind": "fire"})
@@ -347,6 +356,7 @@ func _build_pickups() -> void:
 		view.setup(_bank, "fuel_canister", _stand_in_size("fuel_canister", fp), float(fp["height"]),
 			_stand_in_color("fuel_canister"), 0.0, 0.0, MASK_SHADOWED | MASK_PROPS)
 		view.add_spot(Vector3(0, float(fp["height"]) + 0.05, 0), 2.0, Color(1.0, 0.85, 0.3))
+		_add_glow(view, Vector2.ZERO, 0.15, canister_glow_color, canister_glow_radius_m)
 		_world.add_child(view)
 		_canisters.append(view)
 
@@ -354,6 +364,7 @@ func _build_pickups() -> void:
 func _build_drones() -> void:
 	var fp: Dictionary = _layout["footprints"]["scrap_drone"]
 	var hover := float(fp.get("hover_height", 1.2))
+	_eye_anchor = _bank.light_anchor("scrap_drone", Vector3(0.42, hover + 0.2, 0))
 	for d: Dictionary in sim.drones:
 		var view := EntityView.new()
 		view.name = "Drone%d" % d["id"]
@@ -363,7 +374,7 @@ func _build_drones() -> void:
 		_add_blob(view, 0.5, 0.45)
 		_world.add_child(view)
 		_drones.append(view)
-		var eye := _make_light(eye_color, eye_energy, eye_radius_m, (hover + 0.2) * Iso.LIFT, _pool)
+		var eye := _make_light(eye_color, eye_energy, eye_radius_m, _eye_anchor.y * Iso.LIFT, _pool)
 		eye.range_item_cull_mask = MASK_SHADOWED | MASK_PROPS
 		add_child(eye)
 		_eyes.append(eye)
@@ -375,7 +386,8 @@ func _build_robot() -> void:
 	_robot.name = "Robot"
 	_robot.setup(_bank, "robot", _stand_in_size("robot", fp), float(fp["height"]), _stand_in_color("robot"),
 		sim.robot_heading, 0.0, MASK_SHADOWED)
-	var hh := float(fp.get("headlight_height", 1.1))
+	_head_anchor = _bank.light_anchor("robot", Vector3(0.3, float(fp.get("headlight_height", 1.1)), 0))
+	var hh := _head_anchor.y
 	_robot.add_spot(Vector3(0.47, hh, 0), 3.5, Color(1.0, 0.97, 0.85))
 	_robot_blob = _add_blob(_robot, 0.75, 0.55)
 	_world.add_child(_robot)
@@ -449,7 +461,7 @@ func _add_blob(view: EntityView, radius_m: float, alpha: float) -> Sprite2D:
 	return s
 
 
-func _add_glow(view: EntityView, height_m: float, color: Color, radius_m: float) -> void:
+func _add_glow(view: EntityView, ground_off: Vector2, height_m: float, color: Color, radius_m: float) -> void:
 	var s := Sprite2D.new()
 	s.texture = _radial
 	var b := EntityView.unlit_boost
@@ -459,7 +471,7 @@ func _add_glow(view: EntityView, height_m: float, color: Color, radius_m: float)
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	s.material = m
 	s.scale = Vector2.ONE * (2.0 * radius_m * Iso.PX_PER_M / _radial.width)
-	s.position = Iso.to_screen(Vector2.ZERO, height_m)
+	s.position = Iso.to_screen(ground_off, height_m)
 	view.add_child(s)
 
 
@@ -537,7 +549,7 @@ func _sync_views(_delta: float) -> void:
 		view.set_lift(view.base_lift + sin(_anim_time * 2.6 + i) * 0.08)
 		view.set_pose("hover", d["heading"], _anim_time + i * 0.3)
 		view.set_flash(d["hit_flash"] / Sim.HIT_FLASH)
-		_eyes[i].position = Iso.to_screen(d["pos"])
+		_eyes[i].position = Iso.to_screen(d["pos"] + Vector2(_eye_anchor.x, _eye_anchor.z).rotated(d["heading"]))
 		_eyes[i].energy = eye_energy * (1.0 + 1.5 * d["hit_flash"] / Sim.HIT_FLASH)
 	for i in _canisters.size():
 		_canisters[i].visible = not sim.canisters[i]["taken"]
@@ -552,8 +564,9 @@ func _update_lights() -> void:
 	var fwd := Iso.to_screen(Vector2.from_angle(sim.robot_heading))
 	var side := Iso.to_screen(Vector2.from_angle(sim.robot_heading + PI * 0.5))
 	var px_per_tex := headlight_range_m / _headlight_tex.get_width()
+	var lamp_at := sim.robot_pos + Vector2(_head_anchor.x, _head_anchor.z).rotated(sim.robot_heading)
 	for l in _headlight:
-		l.position = Iso.to_screen(sim.robot_pos)
+		l.position = Iso.to_screen(lamp_at)
 		l.rotation = fwd.angle()
 		l.scale = Vector2(fwd.length(), side.length()) * px_per_tex
 		l.energy = headlight_energy * fade * (1.0 if l == _headlight[0] else prop_light_scale)
@@ -561,21 +574,32 @@ func _update_lights() -> void:
 	_robot_glow.position = Iso.to_screen(sim.robot_pos)
 	_robot_glow.energy = 0.6 * fade
 	_robot.set_glow(fade)
-	# Lamps and fire flicker (seeded noise, presentation only).
+	# Lamps and fire flicker: noise over time, so the flicker is the same at any frame rate.
 	for f: Dictionary in _flickers:
 		var e: float = f["base"]
 		match f["kind"]:
 			"lamp_flicker":
-				var r := _rng.randf()
+				var r := _hash01(floori(_anim_time * flicker_rate_hz))
 				if r < 0.06:
 					e *= 0.08
 				elif r < 0.16:
 					e *= 0.55
 			"fire":
-				e *= 0.82 + 0.18 * sin(_anim_time * 11.0) * sin(_anim_time * 7.3 + 1.0) + _rng.randf_range(-0.08, 0.08)
+				e *= 0.78 + 0.22 * _value_noise(_anim_time * 9.0) + 0.1 * sin(_anim_time * 13.0)
 		var lights: Array = f["lights"]
 		lights[0].energy = e
 		lights[1].energy = e * prop_light_scale
+
+
+## 0..1 pseudo-random value for an integer slot (seeded by flicker_seed).
+func _hash01(slot: int) -> float:
+	return float(absi(hash(Vector2i(slot, flicker_seed))) % 10000) / 10000.0
+
+
+## Smooth 0..1 noise over t (linear between hashed integer slots, smoothstepped).
+func _value_noise(t: float) -> float:
+	var i := floori(t)
+	return lerpf(_hash01(i), _hash01(i + 1), smoothstep(0.0, 1.0, t - i))
 
 
 ## A tall prop drawn after the robot (lower on screen) whose image covers the robot's body fades out.
@@ -583,7 +607,7 @@ func _update_cutaway(delta: float) -> void:
 	var body := Iso.to_screen(sim.robot_pos, 0.7)
 	var robot_y := Iso.to_screen(sim.robot_pos).y
 	for v in _tall:
-		var hides := v.position.y > robot_y and v.screen_rect().has_point(body - v.position)
+		var hides := v.position.y > robot_y and v.covers(body - v.position)
 		var target := cutaway_alpha if hides else 1.0
 		v.modulate.a = move_toward(v.modulate.a, target, cutaway_speed * delta)
 
@@ -701,6 +725,8 @@ func _make_radial(w: int, h: int) -> GradientTexture2D:
 
 ## Top-down headlight cone: apex at the left middle, pointing +x (= the heading), soft edges, distance falloff.
 func _make_cone() -> ImageTexture:
+	if _cone_cache != null:
+		return _cone_cache
 	var n := 256
 	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
 	var half := deg_to_rad(headlight_half_angle_deg)
@@ -713,4 +739,5 @@ func _make_cone() -> ImageTexture:
 			var fall := (1.0 - smoothstep(0.35, 1.0, d)) * smoothstep(0.0, 0.05, d)
 			var c := edge * fall
 			img.set_pixel(x, y, Color(c, c, c, c))
-	return ImageTexture.create_from_image(img)
+	_cone_cache = ImageTexture.create_from_image(img)
+	return _cone_cache

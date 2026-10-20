@@ -2,18 +2,21 @@ class_name SpriteBank
 extends RefCounted
 ## Loads the pre-rendered sprites of A01 from res://assets/sprites/manifest.json:
 ## assets/sprites/<name>/<anim>_<dir>_<frame>.png (+ _n.png normal map, optional _e.png emissive).
-## An asset missing from the manifest (or the whole manifest) means "no sprites": the caller uses a stand-in.
-## The manifest reader accepts a few spellings of each key so small format details do not need code changes.
+## An asset missing from the manifest, or whose first frame is missing, means "no sprites": the caller uses a
+## stand-in. The reader accepts a few spellings of each key so small format details do not need code changes.
 
 const MANIFEST := "res://assets/sprites/manifest.json"
 const ROOT := "res://assets/sprites"
 
 var px_per_m := 64.0
-var _assets: Dictionary = {}  ## name -> {origin: Vector2, dirs: int, anims: {anim: frames}, fps: float, lift_m: float}
+## name -> {origin: Vector2, dirs: int, anims: {anim: {frames, fps, loop}}, lift_m: float, lights: {name: Vector3}}
+var _assets: Dictionary = {}
 var _cache: Dictionary = {}  ## "name/anim_dir_frame" -> {tex: CanvasTexture, emissive: Texture2D or null}
+var _root := ROOT
 
 
 func _init(path := MANIFEST) -> void:
+	_root = path.get_base_dir()
 	if not FileAccess.file_exists(path):
 		return
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -29,7 +32,7 @@ func _init(path := MANIFEST) -> void:
 				_add(str(entry["name"]), entry)
 	elif list is Dictionary:
 		for key: Variant in list:
-			if list[key] is Dictionary:
+			if list[key] is Dictionary and (list[key].has("anims") or list[key].has("animations")):
 				_add(str(key), list[key])
 
 
@@ -50,14 +53,28 @@ func dirs(asset: String) -> int:
 	return _assets[asset]["dirs"]
 
 
-func fps(asset: String) -> float:
-	return _assets[asset]["fps"]
+func fps(asset: String, anim: String) -> float:
+	return float(_assets[asset]["anims"].get(anim, {}).get("fps", 12.0))
+
+
+func loops(asset: String, anim: String) -> bool:
+	return bool(_assets[asset]["anims"].get(anim, {}).get("loop", true))
 
 
 ## Extra lift in metres the presentation adds; A01 renders actors at their height, so callers pass 0.
 func lift_m(asset: String, fallback: float) -> float:
 	var v: float = _assets[asset]["lift_m"]
 	return fallback if v < 0.0 else v
+
+
+## A light anchor in metres at dir 0 (x, y up, z; glTF axes), or fallback when the manifest has none.
+func light_anchor(asset: String, fallback: Vector3) -> Vector3:
+	if not has(asset):
+		return fallback
+	var lights: Dictionary = _assets[asset]["lights"]
+	if lights.is_empty():
+		return fallback
+	return lights.values()[0]
 
 
 ## The anim to play: the wanted one if rendered, else a close substitute, else the first one.
@@ -70,7 +87,7 @@ func pick_anim(asset: String, wanted: String) -> String:
 
 
 func frame_count(asset: String, anim: String) -> int:
-	return int(_assets[asset]["anims"].get(anim, 1))
+	return int(_assets[asset]["anims"].get(anim, {}).get("frames", 1))
 
 
 ## {tex: CanvasTexture (colour + normal), emissive: Texture2D or null}, or {} when the file is missing.
@@ -78,7 +95,7 @@ func frame(asset: String, anim: String, dir: int, index: int) -> Dictionary:
 	var key := "%s/%s_%d_%d" % [asset, anim, dir, index]
 	if _cache.has(key):
 		return _cache[key]
-	var base := "%s/%s/%s_%d_%d" % [ROOT, asset, anim, dir, index]
+	var base := "%s/%s/%s_%d_%d" % [_root, asset, anim, dir, index]
 	var out := {}
 	if ResourceLoader.exists(base + ".png"):
 		var tex := CanvasTexture.new()
@@ -96,29 +113,50 @@ func _add(asset: String, entry: Dictionary) -> void:
 	var raw: Variant = entry.get("anims", entry.get("animations", {}))
 	if raw is Dictionary:
 		for a: Variant in raw:
-			var v: Variant = raw[a]
-			if v is Dictionary:
-				anims[str(a)] = int(v.get("frames", v.get("frame_count", 1)))
-			else:
-				anims[str(a)] = int(v)
+			anims[str(a)] = _anim_info(raw[a])
 	elif raw is Array:
 		for v: Variant in raw:
 			if v is Dictionary and v.has("name"):
-				anims[str(v["name"])] = int(v.get("frames", v.get("frame_count", 1)))
+				anims[str(v["name"])] = _anim_info(v)
 			else:
-				anims[str(v)] = 1
+				anims[str(v)] = {"frames": 1, "fps": 12.0, "loop": true}
 	if anims.is_empty():
-		anims["static"] = 1
-	var o: Variant = entry.get("origin", entry.get("ground_origin", entry.get("origin_px", [0, 0])))
+		anims["static"] = {"frames": 1, "fps": 1.0, "loop": false}
+	var o: Variant = entry.get("origin", entry.get("ground_origin", entry.get("origin_px", null)))
 	var origin_px := Vector2.ZERO
 	if o is Array and o.size() >= 2:
 		origin_px = Vector2(float(o[0]), float(o[1]))
 	elif o is Dictionary:
 		origin_px = Vector2(float(o.get("x", 0)), float(o.get("y", 0)))
+	else:
+		push_warning("sprite manifest: %s has no origin; drawing it from its top-left corner" % asset)
+	var lights := {}
+	var raw_lights: Variant = entry.get("lights", {})
+	if raw_lights is Dictionary:
+		for k: Variant in raw_lights:
+			var v: Variant = raw_lights[k]
+			if v is Array and v.size() >= 3:
+				lights[str(k)] = Vector3(float(v[0]), float(v[1]), float(v[2]))
+	var dirs := int(entry.get("dirs", entry.get("dir_count", entry.get("directions", 1))))
+	var first: String = anims.keys()[0]
+	var first_png := "%s/%s/%s_0_0.png" % [_root, asset, first]
+	if not ResourceLoader.exists(first_png):
+		push_warning("sprite manifest: %s lists %s but %s is missing; using the stand-in box" % [asset, first, first_png])
+		return
 	_assets[asset] = {
 		"origin": origin_px,
-		"dirs": int(entry.get("dirs", entry.get("dir_count", entry.get("directions", 1)))),
+		"dirs": maxi(dirs, 1),
 		"anims": anims,
-		"fps": float(entry.get("fps", 12.0)),
 		"lift_m": float(entry.get("lift_m", -1.0)),
+		"lights": lights,
 	}
+
+
+static func _anim_info(v: Variant) -> Dictionary:
+	if v is Dictionary:
+		return {
+			"frames": maxi(int(v.get("frames", v.get("frame_count", 1))), 1),
+			"fps": float(v.get("fps", 12.0)),
+			"loop": bool(v.get("loop", true)),
+		}
+	return {"frames": maxi(int(v), 1), "fps": 12.0, "loop": true}
