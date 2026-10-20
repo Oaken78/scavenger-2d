@@ -100,6 +100,180 @@
         }
       },
       "emissive": false
+    },
+    "house_ruin_a": {
+      "kind": "prop",
+      "size": [
+        780,
+        659
+      ],
+      "origin": [
+        390,
+        463
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    },
+    "house_ruin_b": {
+      "kind": "prop",
+      "size": [
+        708,
+        571
+      ],
+      "origin": [
+        354,
+        393
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    },
+    "subway_entrance": {
+      "kind": "prop",
+      "size": [
+        460,
+        389
+      ],
+      "origin": [
+        230,
+        272
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    },
+    "car_wreck": {
+      "kind": "prop",
+      "size": [
+        312,
+        201
+      ],
+      "origin": [
+        156,
+        125
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    },
+    "street_lamp": {
+      "kind": "prop",
+      "size": [
+        146,
+        293
+      ],
+      "origin": [
+        73,
+        279
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": true,
+      "lights": {
+        "light": [
+          0.05,
+          4.2,
+          -1.15
+        ]
+      }
+    },
+    "campfire": {
+      "kind": "prop",
+      "size": [
+        92,
+        58
+      ],
+      "origin": [
+        46,
+        35
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": true,
+      "lights": {
+        "light": [
+          0.0,
+          0.6,
+          0.0
+        ]
+      }
+    },
+    "tree": {
+      "kind": "prop",
+      "size": [
+        300,
+        386
+      ],
+      "origin": [
+        150,
+        355
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
+    },
+    "bush": {
+      "kind": "prop",
+      "size": [
+        102,
+        91
+      ],
+      "origin": [
+        51,
+        68
+      ],
+      "dirs": 4,
+      "anims": {
+        "static": {
+          "frames": 1,
+          "fps": 1,
+          "loop": false
+        }
+      },
+      "emissive": false
     }
   }
 }
